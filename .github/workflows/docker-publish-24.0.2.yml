@@ -1,4 +1,4 @@
-name: Docker apple idendity provider keycloak 
+name: Docker apple idendity provider keycloak 24.0.2
 'on':
   push:
     tags:
