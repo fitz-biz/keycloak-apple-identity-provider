@@ -1,6 +1,7 @@
 FROM quay.io/keycloak/keycloak:23.0.5 as builder
 #ENV KC_HEALTH_ENABLED=true
 ENV KC_FEATURES=token-exchange
+ENV KC_METRICS_ENABLED=true
 #ENV KC_HTTP_RELATIVE_PATH="/auth"
 # Install custom providers
 # Apple Social Identity Provider - https://github.com/klausbetz/apple-identity-provider-keycloak
