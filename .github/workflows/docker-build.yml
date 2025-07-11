@@ -1,0 +1,115 @@
+name: Build and Push Keycloak Apple Identity Provider
+
+on:
+  workflow_dispatch:
+    inputs:
+      keycloak_version:
+        description: 'Keycloak version (use "latest" for latest release)'
+        required: true
+        default: 'latest'
+      apple_provider_version:
+        description: 'Apple Identity Provider version (use "latest" for latest release)'
+        required: true
+        default: 'latest'
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly on Monday at 6 AM UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get latest Keycloak version
+        id: keycloak-version
+        run: |
+          if [ "${{ github.event.inputs.keycloak_version || 'latest' }}" == "latest" ]; then
+            VERSION=$(curl -s https://api.github.com/repos/keycloak/keycloak/releases/latest | jq -r '.tag_name')
+            echo "Using latest Keycloak version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ github.event.inputs.keycloak_version }}"
+            echo "Using specified Keycloak version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get latest Apple Identity Provider version
+        id: apple-version
+        run: |
+          if [ "${{ github.event.inputs.apple_provider_version || 'latest' }}" == "latest" ]; then
+            VERSION=$(curl -s https://api.github.com/repos/klausbetz/apple-identity-provider-keycloak/releases/latest | jq -r '.tag_name')
+            echo "Using latest Apple Identity Provider version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+          else
+            VERSION="${{ github.event.inputs.apple_provider_version }}"
+            echo "Using specified Apple Identity Provider version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Docker tags
+        id: tags
+        run: |
+          REGISTRY=ghcr.io
+          IMAGE_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+          BASE_TAG="${REGISTRY}/${IMAGE_NAME}"
+          
+          KEYCLOAK_VER="${{ steps.keycloak-version.outputs.version }}"
+          APPLE_VER="${{ steps.apple-version.outputs.version }}"
+          
+          # Remove 'v' prefix if present
+          KEYCLOAK_VER=${KEYCLOAK_VER#v}
+          APPLE_VER=${APPLE_VER#v}
+          
+          if [ "${{ steps.keycloak-version.outputs.is_latest }}" == "true" ] && [ "${{ steps.apple-version.outputs.is_latest }}" == "true" ]; then
+            TAGS="${BASE_TAG}:latest"
+            echo "Tagging as latest (both versions are latest)"
+          else
+            TAGS="${BASE_TAG}:${KEYCLOAK_VER}-${APPLE_VER}"
+            echo "Tagging as ${KEYCLOAK_VER}-${APPLE_VER}"
+          fi
+          
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "keycloak_clean=$KEYCLOAK_VER" >> $GITHUB_OUTPUT
+          echo "apple_clean=$APPLE_VER" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            KEYCLOAK_VERSION=${{ steps.tags.outputs.keycloak_clean }}
+            APPLE_PROVIDER_VERSION=${{ steps.tags.outputs.apple_clean }}
+          labels: |
+            org.opencontainers.image.title=Keycloak Apple Identity Provider
+            org.opencontainers.image.description=Keycloak with Apple Sign-In Identity Provider
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.keycloak_clean }}-${{ steps.tags.outputs.apple_clean }}
+            org.opencontainers.image.created=${{ steps.date.outputs.date }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT

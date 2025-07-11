@@ -3,7 +3,9 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(find:*)",
-      "Bash(jar:*)"
+      "Bash(jar:*)",
+      "Bash(rm:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
