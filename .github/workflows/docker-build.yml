@@ -71,11 +71,15 @@ jobs:
           KEYCLOAK_VER=${KEYCLOAK_VER#v}
           APPLE_VER=${APPLE_VER#v}
           
+          # Always create versioned tag
+          VERSIONED_TAG="${BASE_TAG}:${KEYCLOAK_VER}-${APPLE_VER}"
+          TAGS="$VERSIONED_TAG"
+          
+          # Add latest tag if both versions are latest
           if [ "${{ steps.keycloak-version.outputs.is_latest }}" == "true" ] && [ "${{ steps.apple-version.outputs.is_latest }}" == "true" ]; then
-            TAGS="${BASE_TAG}:latest"
-            echo "Tagging as latest (both versions are latest)"
+            TAGS="$TAGS,${BASE_TAG}:latest"
+            echo "Tagging as latest and ${KEYCLOAK_VER}-${APPLE_VER} (both versions are latest)"
           else
-            TAGS="${BASE_TAG}:${KEYCLOAK_VER}-${APPLE_VER}"
             echo "Tagging as ${KEYCLOAK_VER}-${APPLE_VER}"
           fi
           
